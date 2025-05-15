@@ -1,53 +1,16 @@
 const express = require('express');
+const axios = require('axios');
 let books = require("./booksdb.js");
 let isValid = require("./auth_users.js").isValid;
 let users = require("./auth_users.js").users;
-
 const public_users = express.Router();
 
-// Enregistrement d'un nouvel utilisateur
-public_users.post("/register", (req, res) => {
-  const { username, password } = req.body;
+// ... tes autres routes ici ...
 
-  // Vérification que les champs sont présents
-  if (!username || !password) {
-    return res.status(400).json({ message: "Nom d'utilisateur et mot de passe requis." });
-  }
-
-  // Vérifie si l'utilisateur existe déjà
-  const userExists = users.some(user => user.username === username);
-  if (userExists) {
-    return res.status(409).json({ message: "Nom d'utilisateur déjà utilisé." });
-  }
-
-  // Ajoute le nouvel utilisateur
-  users.push({ username, password });
-  return res.status(201).json({ message: `L'utilisateur "${username}" a été créé avec succès.` });
-});
-
-// Obtenir la liste des livres
-public_users.get('/', function (req, res) {
-  return res.status(200).json(books);
-});
-
-// Obtenir un livre par ISBN
-public_users.get('/isbn/:isbn', function (req, res) {
-  const isbn = req.params.isbn;
-  const book = books[isbn];
-  
-  if (book) {
-    return res.status(200).json(book);
-  } else {
-    return res.status(404).json({ message: "Livre non trouvé pour cet ISBN." });
-  }
-});
-
-// Obtenir des livres par auteur
+// Route synchrone classique pour auteur (existante)
 public_users.get('/author/:author', function (req, res) {
   const author = req.params.author.toLowerCase();
-  const matchingBooks = Object.values(books).filter(
-    book => book.author.toLowerCase() === author
-  );
+  const matchingBooks = Object.values(books).filter(book => book.author.toLowerCase() === author);
 
   if (matchingBooks.length > 0) {
     return res.status(200).json(matchingBooks);
@@ -56,29 +19,25 @@ public_users.get('/author/:author', function (req, res) {
   }
 });
 
-// Obtenir des livres par titre
-public_users.get('/title/:title', function (req, res) {
-  const title = req.params.title.toLowerCase();
-  const matchingBooks = Object.values(books).filter(
-    book => book.title.toLowerCase() === title
-  );
+// Route async-await avec Axios pour récupérer les livres par auteur
+public_users.get('/author-async/:author', async (req, res) => {
+  const author = req.params.author.toLowerCase();
 
-  if (matchingBooks.length > 0) {
-    return res.status(200).json(matchingBooks);
-  } else {
-    return res.status(404).json({ message: "Aucun livre trouvé pour ce titre." });
-  }
-});
+  try {
+    // On appelle la route synchrone locale /author/:author
+    const response = await axios.get(`http://localhost:5000/author/${author}`);
 
-// Obtenir les critiques d'un livre par ISBN
-public_users.get('/review/:isbn', function (req, res) {
-  const isbn = req.params.isbn;
-  const book = books[isbn];
-
-  if (book) {
-    return res.status(200).json(book.reviews);
-  } else {
-    return res.status(404).json({ message: "Livre non trouvé pour cet ISBN." });
+    // Renvoie les livres trouvés
+    return res.status(200).json({
+      message: `Livres trouvés pour l'auteur '${author}' (via async-await + Axios)`,
+      books: response.data
+    });
+  } catch (error) {
+    // Gestion erreur 404 ou autre
+    if (error.response && error.response.status === 404) {
+      return res.status(404).json({ message: `Aucun livre trouvé pour l'auteur '${author}'.` });
+    }
+    return res.status(500).json({ message: "Erreur lors de la récupération des livres.", error: error.message });
   }
 });
 
